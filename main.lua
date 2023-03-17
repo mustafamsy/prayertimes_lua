@@ -115,11 +115,7 @@ end
 -- return prayer times for a given timestamp
 function PrayTime:getPrayerTimes(timestamp, latitude, longitude, timeZone)
     local date = os.date("*t", timestamp)
-    return self:getDatePrayerTimes(date.year, date.month,
-                                   date.day,
-                                   latitude,
-                                   longitude,
-                                   timeZone)
+    return self:getDatePrayerTimes(date.year, date.month, date.day, latitude, longitude, timeZone)
 end
 
 -- set the juristic method for Asr
@@ -412,12 +408,7 @@ function PrayTime:julianDate(year, month, day)
     local A = math.floor(year / 100);
     local B = 2 - A + math.floor(A / 4);
 
-    local JD =
-        math.floor(365.25 * (year + 4716)) +
-        math.floor(30.6001 * (month + 1)) +
-        day +
-        B -
-        1524.5;
+    local JD = math.floor(365.25 * (year + 4716)) + math.floor(30.6001 * (month + 1)) + day + B - 1524.5;
     return JD;
 end
 
@@ -504,6 +495,8 @@ prayTime = PrayTime:new();
 prayTime:setCalcMethod(prayTime.Bahrain);
 
 --userCoords = {"26.57408","50.083834"}
+
+-- TODO: timeZone based on location function 
 
 local times = prayTime:getPrayerTimes(os.time(), 26.57408, 50.083834, 3); -- (timestamp, latitude, longitude, timeZone)
 

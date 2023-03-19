@@ -102,19 +102,19 @@ function PrayTime:setCalcMethod(methodID)
     self.calcMethod = methodID
 end
 
-
 -- return prayer times for a given date
 function PrayTime:getDatePrayerTimes(year, month, day, latitude, longitude, timeZone)
     self.lat = latitude
     self.lng = longitude
-    self.timeZone = timeZone
+    -- self.timeZone = timeZone
+    self.timeZone = self:getTimeZone({year=year, month=month, day=day})
     self.JDate = self:julianDate(year, month, day) - longitude / (15 * 24)
     return self:computeDayTimes()
 end
 
 -- return prayer times for a given timestamp
 function PrayTime:getPrayerTimes(timestamp, latitude, longitude, timeZone)
-    local date = os.date("*t", timestamp)
+    local date = timestamp
     return self:getDatePrayerTimes(date.year, date.month, date.day, latitude, longitude, timeZone)
 end
 
@@ -177,7 +177,6 @@ function PrayTime:setTimeFormat(timeFormat)
     self.timeFormat = timeFormat
 end
 
-
 -- convert float hours to 24h format
 function PrayTime:floatToTime24(time)
     if time ~= time then
@@ -237,7 +236,6 @@ function PrayTime:sunDeclination(jd)
     return sp[1]
 end
 
-
 -- compute mid-day (Dhuhr, Zawal) time
 function PrayTime:computeMidDay(t)
     local T = self:equationOfTime(self.JDate + t)
@@ -261,7 +259,6 @@ function PrayTime:computeAsr(step, t)
     return self:computeTime(G, t)
 end
 
-
 -- compute prayer times at given julian date
 function PrayTime:computeTimes(times)
     local t = self:dayPortion(times)
@@ -277,7 +274,6 @@ function PrayTime:computeTimes(times)
 
     return {Fajr, Sunrise, Dhuhr, Asr, Sunset, Maghrib, Isha, Imsak}
 end
-
 
 -- compute prayer times at given julian date
 function PrayTime:computeDayTimes()
@@ -311,7 +307,6 @@ function PrayTime:adjustTimes(times)
     return times
 end
 
-
 -- convert times array to given time format
 function PrayTime:adjustTimesFormat(times)
     if self.timeFormat == self.Float then
@@ -328,7 +323,6 @@ function PrayTime:adjustTimesFormat(times)
     end
     return times;
 end
-
 
 -- adjust Fajr, Isha and Maghrib for locations in higher latitudes
 function PrayTime:adjustHighLatTimes(times)
@@ -358,8 +352,6 @@ function PrayTime:adjustHighLatTimes(times)
     return times;
 end
 
-
-
 -- the night portion used for adjusting times in higher latitudes
 function PrayTime:nightPortion(angle)
     if self.adjustHighLats == self.AngleBased then
@@ -381,7 +373,7 @@ function PrayTime:dayPortion(times)
     return times;
 end
 
--- Misc Functions
+------------------------ Misc Functions -----------------------
 
 -- compute the difference between two times 
 function PrayTime:timeDiff(time1, time2)
@@ -397,7 +389,7 @@ function PrayTime:twoDigitsFormat(num)
     end 
 end 
 
--- Julian Date Functions
+------------------------ Julian Date Functions -----------------------
 
 -- calculate julian date from a calendar date
 function PrayTime:julianDate(year, month, day)
@@ -408,7 +400,12 @@ function PrayTime:julianDate(year, month, day)
     local A = math.floor(year / 100);
     local B = 2 - A + math.floor(A / 4);
 
-    local JD = math.floor(365.25 * (year + 4716)) + math.floor(30.6001 * (month + 1)) + day + B - 1524.5;
+    local JD =
+        math.floor(365.25 * (year + 4716)) +
+        math.floor(30.6001 * (month + 1)) +
+        day +
+        B -
+        1524.5;
     return JD;
 end
 
@@ -421,8 +418,7 @@ function PrayTime:calcJD(year, month, day)
     return J1970 + days - 0.5;
 end
 
-
--- Trigonometric Functions
+------------------------ Trigonometric Functions -----------------------
 
 -- degree sin
 function PrayTime:dsin(d)
@@ -488,18 +484,76 @@ function PrayTime:fixhour(a)
     return a;
 end 
 
-prayTime = PrayTime:new();
+------------------------ Time Zone Functions -----------------------
 
+-- get local time zone
+function PrayTime:getTimeZone(date)
+    local year = date.year
+    local t1 = self:gmtOffset({year=year, month=1, day=1})
+    local t2 = self:gmtOffset({year=year, month=7, day=1})
+    return math.min(t1, t2)
+end
+
+-- get daylight saving for a given date
+function PrayTime:getDst(date)
+    -- You can use the os.date function to get the current timezone offset
+    local timezoneOffset = os.date("*t").isdst and 1 or 0
+    return timezoneOffset
+end
+
+-- GMT offset for a given date
+function PrayTime:gmtOffset(date)
+    local year, month, day = date.year, date.month, date.day
+    local timestamp = os.time{year=year, month=month, day=day}
+    local utcDate = os.date("!*t", timestamp)
+    local localDate = os.date("*t", timestamp)
+    local utcTimestamp = os.time(utcDate)
+    local localTimestamp = os.time(localDate)
+    local hoursDiff = os.difftime(localTimestamp, utcTimestamp) / 3600
+    return hoursDiff
+end
+
+------------------------ Helper Functions -----------------------
+
+
+-- Print Table
+function print_r(t, name, indent)
+    local tableList = {}
+    function table_r (t, name, indent, full)
+        local serial=string.len(full) == 0 and name or type(name)~="number" and '["'..tostring(name)..'"]' or '['..name..']'
+        io.write(indent,serial,' = ') 
+        if type(t) == "table" then
+            if tableList[t] ~= nil then
+                io.write('{}; -- ',tableList[t],' (self reference)\n')
+            else
+                tableList[t]=full..serial
+                if next(t) then -- Table not empty
+                    io.write('{\n')
+                    for key,value in pairs(t) do table_r(value,key,indent..'\t',full..serial) end 
+                    io.write(indent,'};\n')
+                else io.write('{};\n') end
+            end
+        else
+            io.write(type(t)~="number" and type(t)~="boolean" and '"'..tostring(t)..'"' or tostring(t),';\n') 
+        end
+  end
+  table_r(t,name or '__unnamed__',indent or '','')
+end
+
+
+------------------------ Usage -----------------------
+
+-- Initialize
+prayTime = PrayTime:new();
 
 -- Sample Usage
 prayTime:setCalcMethod(prayTime.Bahrain);
 
---userCoords = {"26.57408","50.083834"}
+userCoords = {"26.57408","50.083834"}
 
--- TODO: timeZone based on location function 
+local times = prayTime:getPrayerTimes(os.date("*t"), userCoords[1], userCoords[2]); -- (timestamp, latitude, longitude, timeZone)
 
-local times = prayTime:getPrayerTimes(os.time(), 26.57408, 50.083834, 3); -- (timestamp, latitude, longitude, timeZone)
-
+print('Todays Prayer Time');
 print('Imsak' , times[8]);
 print('Fajr' , times[1]);
 print('Sunrise' , times[2]);
@@ -510,3 +564,52 @@ print('Maghrib' , times[6]);
 print('Isha' , times[7]);
 
 
+local prayerData = {}
+
+function getDates()
+    local dates = {}
+    local currentDate = os.date("*t")
+    local currentYear = currentDate.year
+    local currentMonth = currentDate.month
+    local currentDay = currentDate.day
+
+    for month=currentMonth,12 do
+        dates[month] = {}
+        local daysInMonth = os.date("*t", os.time{year=currentYear, month=month+1, day=0}).day
+        for day=1,daysInMonth do
+            if month == currentMonth and day < currentDay then
+                -- skip days before the current day in the current month
+            else
+                
+                prayerData = prayTime:getPrayerTimes({year=currentYear,month=currentMonth,day=day}, userCoords[1], userCoords[2]);
+
+                local dateStr = string.format("%04d-%02d-%02d", currentYear, month, day)
+                local weekDayStr = os.date("%A", os.time{year=currentYear, month=month, day=day})
+                table.insert(dates[month], {date=dateStr, weekDay=weekDayStr, prayers=prayerData})
+            end
+        end
+    end
+
+    return dates
+end
+
+dates = getDates()
+-- print_r(dates)
+
+-- This will print this year prayer time starting from current day
+for month,days in pairs(dates) do
+    print("Month: " .. month)
+    for _,day in ipairs(days) do
+        print(day.date .. " (" .. day.weekDay .. ")")
+        -- print_r(day.prayers)
+            print('Imsak' , day.prayers[8]);
+            print('Fajr' , day.prayers[1]);
+            print('Sunrise' , day.prayers[2]);
+            print('Dhuhr' , day.prayers[3]);
+            print('Asr' , day.prayers[4]);
+            print('Sunset' , day.prayers[5]);
+            print('Maghrib' , day.prayers[6]);
+            print('Isha' , day.prayers[7]);
+
+    end
+end
